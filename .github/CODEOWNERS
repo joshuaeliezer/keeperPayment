@@ -1,0 +1,30 @@
+# Code Owners
+# Ces personnes seront automatiquement assignées aux PRs
+
+# Tous les fichiers
+* @your-username
+
+# Backend spécifique
+/src/ @backend-team
+
+# Tests
+/test/ @qa-team
+
+# Configuration CI/CD
+/.github/ @devops-team
+*.yml @devops-team
+*.yaml @devops-team
+
+# Configuration de base
+package.json @backend-team
+package-lock.json @backend-team
+tsconfig.json @backend-team
+jest.config.js @backend-team
+
+# Documentation
+/docs/ @backend-team
+README.md @backend-team
+
+# Migrations de base de données
+/src/migrations/ @backend-team
+typeorm.config.ts @backend-team 

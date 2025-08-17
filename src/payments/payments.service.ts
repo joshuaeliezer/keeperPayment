@@ -1,10 +1,15 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Payment } from './entities/payment.entity';
+import { Payments } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfigService } from '@nestjs/config';
-import { ClientProxy, ClientProxyFactory, Transport, RmqOptions } from '@nestjs/microservices';
+import {
+  ClientProxy,
+  ClientProxyFactory,
+  Transport,
+  RmqOptions,
+} from '@nestjs/microservices';
 import { StripeService } from '../stripe/stripe.service';
 import Stripe from 'stripe';
 
@@ -14,8 +19,8 @@ export class PaymentsService {
   private readonly client: ClientProxy;
 
   constructor(
-    @InjectRepository(Payment)
-    private paymentsRepository: Repository<Payment>,
+    @InjectRepository(Payments)
+    private paymentsRepository: Repository<Payments>,
     private configService: ConfigService,
     private stripeService: StripeService,
   ) {
@@ -46,11 +51,12 @@ export class PaymentsService {
       reservationId,
       stripePaymentId: paymentIntent.id,
       amountTotal,
-      commissionAmount: Math.round(amountTotal * 0.10), // 10% commission
-      keeperAmount: amountTotal - Math.round(amountTotal * 0.10),
+      commissionAmount: Math.round(amountTotal * 0.1), // 10% commission
+      keeperAmount: amountTotal - Math.round(amountTotal * 0.1),
       status: 'pending',
       keeperStripeAccountId: keeperId,
     });
+    console.log('payment', payment);
 
     await this.paymentsRepository.save(payment);
 
@@ -87,7 +93,7 @@ export class PaymentsService {
     }
   }
 
-  async getPaymentById(id: string): Promise<Payment> {
+  async getPaymentById(id: string): Promise<Payments> {
     const payment = await this.paymentsRepository.findOne({
       where: { id },
     });
@@ -99,27 +105,70 @@ export class PaymentsService {
     return payment;
   }
 
-  async getAllPayments(): Promise<Payment[]> {
+  async getAllPayments(): Promise<Payments[]> {
     return this.paymentsRepository.find();
   }
 
-  async getPaymentsByStatus(status: 'pending' | 'paid' | 'failed' | 'refunded'): Promise<Payment[]> {
+  async getPaymentsByStatus(
+    status: 'pending' | 'paid' | 'failed' | 'refunded',
+  ): Promise<Payments[]> {
     return this.paymentsRepository.find({
       where: { status },
     });
   }
 
-  async getPaymentsByKeeper(keeperId: string): Promise<Payment[]> {
+  async getPaymentsByKeeper(keeperId: string): Promise<Payments[]> {
     return this.paymentsRepository.find({
       where: { keeperStripeAccountId: keeperId },
     });
   }
 
   async createKeeperAccount(email: string): Promise<Stripe.Account> {
-    return this.stripeService.createKeeperAccount(email);
+    this.logger.log(`Création du compte keeper pour l'email: ${email}`);
+    try {
+      const account = await this.stripeService.createKeeperAccount(email);
+      this.logger.log(`Compte keeper créé avec succès - ID: ${account.id}`);
+      this.logger.debug('Détails du compte:', {
+        id: account.id,
+        email: account.email,
+        type: account.type,
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+      });
+      return account;
+    } catch (error) {
+      this.logger.error(`Erreur lors de la création du compte keeper: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
-  async createKeeperAccountLink(accountId: string): Promise<Stripe.AccountLink> {
+  async createKeeperAccountLink(
+    accountId: string,
+  ): Promise<Stripe.AccountLink> {
     return this.stripeService.createAccountLink(accountId);
   }
-} 
+
+  async findKeeperAccountByEmail(email: string) {
+    return this.stripeService.findAccountByEmail(email);
+  }
+
+  async checkKeeperAccountStatus(accountId: string) {
+    try {
+      const account = await this.stripeService.retrieveAccount(accountId);
+      const isOnboardingComplete = account.charges_enabled && account.payouts_enabled;
+      
+      return {
+        isComplete: isOnboardingComplete,
+        account,
+        status: {
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+        }
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors de la vérification du statut du compte: ${error.message}`);
+      throw error;
+    }
+  }
+}
