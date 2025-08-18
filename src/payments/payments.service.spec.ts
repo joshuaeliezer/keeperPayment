@@ -92,7 +92,9 @@ describe('PaymentsService', () => {
         updatedAt: new Date(),
       };
 
-      mockStripeService.createPaymentIntent.mockResolvedValue(mockPaymentIntent);
+      mockStripeService.createPaymentIntent.mockResolvedValue(
+        mockPaymentIntent,
+      );
       mockPaymentsRepository.create.mockReturnValue(mockPayment);
       mockPaymentsRepository.save.mockResolvedValue(mockPayment);
 
@@ -129,7 +131,9 @@ describe('PaymentsService', () => {
       const error = new Error('Stripe API error');
       mockStripeService.createPaymentIntent.mockRejectedValue(error);
 
-      await expect(service.createPayment(createPaymentDto)).rejects.toThrow('Stripe API error');
+      await expect(service.createPayment(createPaymentDto)).rejects.toThrow(
+        'Stripe API error',
+      );
     });
   });
 
@@ -512,6 +516,6 @@ describe('PaymentsService', () => {
       await expect(service.checkKeeperAccountStatus(accountId)).rejects.toThrow(
         'Stripe account retrieval failed',
       );
-      });
     });
   });
+});

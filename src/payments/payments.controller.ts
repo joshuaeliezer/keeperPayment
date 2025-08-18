@@ -76,7 +76,9 @@ export class PaymentsController {
   }
 
   @Get('status/:status')
-  async getPaymentsByStatus(@Param('status') status: 'pending' | 'paid' | 'failed' | 'refunded') {
+  async getPaymentsByStatus(
+    @Param('status') status: 'pending' | 'paid' | 'failed' | 'refunded',
+  ) {
     try {
       return await this.paymentsService.getPaymentsByStatus(status);
     } catch (error) {
