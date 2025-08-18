@@ -21,7 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:all": "npm run test && npm run test:e2e",
     "test:performance": "node test/performance/load-test.js",
-    "test:full": "npm run test:all && npm run test:performance"
+    "test:full": "npm run test:all && npm run test:performance",
+    "check-coverage": "node scripts/check-coverage.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
