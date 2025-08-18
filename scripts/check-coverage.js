@@ -4,11 +4,22 @@ try {
   // Run coverage test and capture output
   const output = execSync('npm run test:cov', { encoding: 'utf8' });
   
-  // Extract coverage percentage using regex
-  const coverageMatch = output.match(/All files\s+\|\s+(\d+\.\d+)/);
+  // Extract coverage percentage using multiple regex patterns
+  let coverageMatch = output.match(/All files\s+\|\s+(\d+\.\d+)/);
+  
+  if (!coverageMatch) {
+    // Try alternative pattern
+    coverageMatch = output.match(/All files\s+(\d+\.\d+)/);
+  }
+  
+  if (!coverageMatch) {
+    // Try another pattern for different Jest output formats
+    coverageMatch = output.match(/All files\s+\|\s+(\d+\.\d+)/);
+  }
   
   if (!coverageMatch) {
     console.error('Could not find coverage information in test output');
+    console.error('Output:', output);
     process.exit(1);
   }
   
