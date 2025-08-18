@@ -10,7 +10,6 @@ import {
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateKeeperAccountDto } from '../stripe/dto/create-keeper-account.dto';
-import { Request } from 'express';
 
 @Controller('payments')
 export class PaymentsController {
@@ -23,29 +22,6 @@ export class PaymentsController {
     } catch (error) {
       throw new HttpException(
         error.message || 'Erreur lors de la création du paiement',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-  }
-
-  @Post('webhooks/stripe')
-  async handleStripeWebhook(@Body() request: Request & { rawBody: Buffer }) {
-    try {
-      if (!request.rawBody) {
-        throw new Error('No webhook body provided');
-      }
-
-      let event;
-      try {
-        event = JSON.parse(request.rawBody.toString());
-      } catch (err) {
-        throw new Error('Invalid JSON in webhook body');
-      }
-
-      return await this.paymentsService.handleStripeWebhook(event);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Erreur lors du traitement du webhook',
         HttpStatus.BAD_REQUEST,
       );
     }

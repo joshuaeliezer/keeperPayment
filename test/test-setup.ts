@@ -53,20 +53,6 @@ jest.mock('stripe', () => {
         created: 1234567890,
       }),
     },
-    webhooks: {
-      constructEvent: jest.fn().mockReturnValue({
-        id: 'evt_test123',
-        type: 'payment_intent.succeeded',
-        data: {
-          object: {
-            id: 'pi_test123',
-            amount: 1000,
-            currency: 'eur',
-            status: 'succeeded',
-          },
-        },
-      }),
-    },
   };
 
   return jest.fn(() => mockStripe);

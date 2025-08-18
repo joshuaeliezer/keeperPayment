@@ -66,33 +66,6 @@ export class PaymentsService {
     };
   }
 
-  async handleStripeWebhook(event: Stripe.Event) {
-    if (event.type === 'payment_intent.succeeded') {
-      const paymentIntent = event.data.object as Stripe.PaymentIntent;
-      const payment = await this.paymentsRepository.findOne({
-        where: { stripePaymentId: paymentIntent.id },
-      });
-
-      if (payment) {
-        payment.status = 'paid';
-        payment.paidAt = new Date();
-        await this.paymentsRepository.save(payment);
-
-        // Le transfert est déjà géré par Stripe via le payment intent
-        // avec application_fee_amount et transfer_data
-
-        // Notify the main application
-        await this.client.emit('payment.succeeded', {
-          paymentId: payment.id,
-          reservationId: payment.reservationId,
-          amountTotal: payment.amountTotal,
-          keeperAmount: payment.keeperAmount,
-          commissionAmount: payment.commissionAmount,
-        });
-      }
-    }
-  }
-
   async getPaymentById(id: string): Promise<Payments> {
     const payment = await this.paymentsRepository.findOne({
       where: { id },

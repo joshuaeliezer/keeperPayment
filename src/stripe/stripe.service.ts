@@ -73,17 +73,6 @@ export class StripeService {
     return accountLink;
   }
 
-  constructEvent(payload: Buffer, signature: string): Stripe.Event {
-    const webhookSecret = this.configService.get<string>(
-      'STRIPE_WEBHOOK_SECRET',
-    );
-    return this.stripe.webhooks.constructEvent(
-      payload,
-      signature,
-      webhookSecret,
-    );
-  }
-
   async findAccountByEmail(email: string): Promise<Stripe.Account | null> {
     const accounts = await this.stripe.accounts.list({
       limit: 100,
