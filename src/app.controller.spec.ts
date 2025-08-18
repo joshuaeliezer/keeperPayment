@@ -31,4 +31,17 @@ describe('AppController', () => {
       expect(result).toBe(mockHello);
     });
   });
+
+  describe('health', () => {
+    it('should return health status', () => {
+      const result = appController.getHealth();
+
+      expect(result).toHaveProperty('status', 'ok');
+      expect(result).toHaveProperty('timestamp');
+      expect(result).toHaveProperty('uptime');
+      expect(typeof result.timestamp).toBe('string');
+      expect(typeof result.uptime).toBe('number');
+      expect(result.uptime).toBeGreaterThanOrEqual(0);
+    });
+  });
 });
