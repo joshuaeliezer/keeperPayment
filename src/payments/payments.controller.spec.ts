@@ -209,7 +209,9 @@ describe('PaymentsController', () => {
         },
       ];
 
-      mockPaymentsService.getPaymentsByStatus.mockResolvedValue(expectedPayments);
+      mockPaymentsService.getPaymentsByStatus.mockResolvedValue(
+        expectedPayments,
+      );
 
       const result = await controller.getPaymentsByStatus(status);
 
@@ -241,7 +243,9 @@ describe('PaymentsController', () => {
       } catch (e) {
         expect(e).toBeInstanceOf(HttpException);
         expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(e.message).toBe('Erreur lors de la récupération des paiements par statut');
+        expect(e.message).toBe(
+          'Erreur lors de la récupération des paiements par statut',
+        );
       }
     });
   });
@@ -259,7 +263,9 @@ describe('PaymentsController', () => {
         },
       ];
 
-      mockPaymentsService.getPaymentsByKeeper.mockResolvedValue(expectedPayments);
+      mockPaymentsService.getPaymentsByKeeper.mockResolvedValue(
+        expectedPayments,
+      );
 
       const result = await controller.getPaymentsByKeeper(keeperId);
 
@@ -291,7 +297,9 @@ describe('PaymentsController', () => {
       } catch (e) {
         expect(e).toBeInstanceOf(HttpException);
         expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(e.message).toBe('Erreur lors de la récupération des paiements par keeper');
+        expect(e.message).toBe(
+          'Erreur lors de la récupération des paiements par keeper',
+        );
       }
     });
   });
@@ -308,11 +316,17 @@ describe('PaymentsController', () => {
         type: 'express',
       };
 
-      mockPaymentsService.createKeeperAccount.mockResolvedValue(expectedAccount);
+      mockPaymentsService.createKeeperAccount.mockResolvedValue(
+        expectedAccount,
+      );
 
-      const result = await controller.createKeeperAccount(createKeeperAccountDto);
+      const result = await controller.createKeeperAccount(
+        createKeeperAccountDto,
+      );
 
-      expect(service.createKeeperAccount).toHaveBeenCalledWith(createKeeperAccountDto.email);
+      expect(service.createKeeperAccount).toHaveBeenCalledWith(
+        createKeeperAccountDto.email,
+      );
       expect(result).toEqual(expectedAccount);
     });
 
@@ -359,7 +373,9 @@ describe('PaymentsController', () => {
         url: 'https://connect.stripe.com/setup/s/test',
       };
 
-      mockPaymentsService.createKeeperAccountLink.mockResolvedValue(expectedAccountLink);
+      mockPaymentsService.createKeeperAccountLink.mockResolvedValue(
+        expectedAccountLink,
+      );
 
       const result = await controller.createKeeperAccountLink(accountId);
 
@@ -405,7 +421,9 @@ describe('PaymentsController', () => {
         type: 'express',
       };
 
-      mockPaymentsService.findKeeperAccountByEmail.mockResolvedValue(expectedAccount);
+      mockPaymentsService.findKeeperAccountByEmail.mockResolvedValue(
+        expectedAccount,
+      );
 
       const result = await controller.findKeeperAccountByEmail(email);
 
@@ -459,7 +477,9 @@ describe('PaymentsController', () => {
         },
       };
 
-      mockPaymentsService.checkKeeperAccountStatus.mockResolvedValue(mockAccountStatus);
+      mockPaymentsService.checkKeeperAccountStatus.mockResolvedValue(
+        mockAccountStatus,
+      );
 
       const result = await controller.handleOnboardingSuccess(accountId);
 
@@ -489,7 +509,9 @@ describe('PaymentsController', () => {
         },
       };
 
-      mockPaymentsService.checkKeeperAccountStatus.mockResolvedValue(mockAccountStatus);
+      mockPaymentsService.checkKeeperAccountStatus.mockResolvedValue(
+        mockAccountStatus,
+      );
 
       const result = await controller.handleOnboardingSuccess(accountId);
 

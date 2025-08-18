@@ -36,10 +36,8 @@ describe('AppController (e2e)', () => {
   });
 
   it('/ (GET)', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/')
-      .expect(200);
-    
+    const response = await request(app.getHttpServer()).get('/').expect(200);
+
     expect(response.text).toBe('Hello World!');
   });
 
@@ -47,7 +45,7 @@ describe('AppController (e2e)', () => {
     const response = await request(app.getHttpServer())
       .get('/health')
       .expect(200);
-    
+
     expect(response.body).toHaveProperty('status', 'ok');
     expect(response.body).toHaveProperty('timestamp');
     expect(response.body).toHaveProperty('uptime');

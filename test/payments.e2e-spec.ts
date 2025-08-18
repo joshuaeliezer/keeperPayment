@@ -2,17 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Payments } from '../src/payments/entities/payment.entity';
 import { ValidationPipe } from '@nestjs/common';
 import { PaymentsService } from '../src/payments/payments.service';
 import { StripeService } from '../src/stripe/stripe.service';
-import { TestDatabaseModule } from './test-database.module';
 
 describe('PaymentsController (e2e)', () => {
   let app: INestApplication;
-  let paymentsRepository: Repository<Payments>;
 
   const mockPaymentsService = {
     createPayment: jest.fn(),
@@ -46,10 +41,6 @@ describe('PaymentsController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe());
-
-    paymentsRepository = moduleFixture.get<Repository<Payments>>(
-      getRepositoryToken(Payments),
-    );
 
     await app.init();
 
@@ -282,7 +273,9 @@ describe('PaymentsController (e2e)', () => {
         .expect(200)
         .expect((res) => {
           // Le contrôleur peut retourner null ou un objet vide selon la configuration
-          expect(res.body === null || Object.keys(res.body).length === 0).toBe(true);
+          expect(res.body === null || Object.keys(res.body).length === 0).toBe(
+            true,
+          );
         });
     });
   });
