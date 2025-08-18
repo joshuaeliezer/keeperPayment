@@ -23,7 +23,7 @@ export class Payments {
   @Column({
     type: 'text',
     enum: ['pending', 'paid', 'failed', 'refunded'],
-    default: 'pending'
+    default: 'pending',
   })
   status: 'pending' | 'paid' | 'failed' | 'refunded';
 
@@ -32,4 +32,4 @@ export class Payments {
 
   @Column({ name: 'keeper_stripe_account_id', nullable: true })
   keeperStripeAccountId: string;
-} 
+}

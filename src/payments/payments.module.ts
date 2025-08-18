@@ -11,4 +11,4 @@ import { StripeModule } from '../stripe/stripe.module';
   providers: [PaymentsService],
   exports: [PaymentsService],
 })
-export class PaymentsModule {} 
+export class PaymentsModule {}

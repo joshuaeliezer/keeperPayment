@@ -12,11 +12,13 @@ describe('Security Tests', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    );
     await app.init();
   });
 
@@ -123,16 +125,14 @@ describe('Security Tests', () => {
 
   describe('Rate Limiting', () => {
     it('should handle multiple rapid requests', async () => {
-      const requests = Array(10).fill(null).map(() =>
-        request(app.getHttpServer())
-          .get('/payments')
-          .expect(200)
-      );
+      const requests = Array(10)
+        .fill(null)
+        .map(() => request(app.getHttpServer()).get('/payments').expect(200));
 
       const responses = await Promise.all(requests);
-      
+
       // All requests should be processed (no rate limiting implemented yet)
-      responses.forEach(response => {
+      responses.forEach((response) => {
         expect(response.status).toBe(200);
       });
     });

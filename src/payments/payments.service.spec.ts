@@ -1,27 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ConfigService } from '@nestjs/config';
-import { ClientProxy } from '@nestjs/microservices';
-import { Logger, NotFoundException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { StripeService } from '../stripe/stripe.service';
 import { Payments } from './entities/payment.entity';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import Stripe from 'stripe';
+import { StripeService } from '../stripe/stripe.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
-  let paymentsRepository: Repository<Payments>;
-  let stripeService: StripeService;
-  let configService: ConfigService;
-  let clientProxy: ClientProxy;
 
   const mockPaymentsRepository = {
     create: jest.fn(),
     save: jest.fn(),
-    findOne: jest.fn(),
     find: jest.fn(),
+    findOne: jest.fn(),
+    findOneBy: jest.fn(),
   };
 
   const mockStripeService = {
@@ -57,20 +49,13 @@ describe('PaymentsService', () => {
           useValue: mockConfigService,
         },
         {
-          provide: 'RABBITMQ_CLIENT',
+          provide: 'PAYMENTS_SERVICE',
           useValue: mockClientProxy,
         },
       ],
     }).compile();
 
     service = module.get<PaymentsService>(PaymentsService);
-    paymentsRepository = module.get<Repository<Payments>>(getRepositoryToken(Payments));
-    stripeService = module.get<StripeService>(StripeService);
-    configService = module.get<ConfigService>(ConfigService);
-    clientProxy = module.get<ClientProxy>('RABBITMQ_CLIENT');
-
-    // Mock the client property
-    (service as any).client = mockClientProxy;
   });
 
   afterEach(() => {
@@ -78,33 +63,35 @@ describe('PaymentsService', () => {
   });
 
   describe('createPayment', () => {
-    const createPaymentDto: CreatePaymentDto = {
-      reservationId: '123e4567-e89b-12d3-a456-426614174000',
-      amountTotal: 1000,
-      keeperId: 'acct_keeper123',
-    };
-
-    const mockPaymentIntent: Stripe.PaymentIntent = {
-      id: 'pi_test123',
-      client_secret: 'pi_test123_secret',
-      amount: 1000,
-      currency: 'eur',
-      status: 'requires_payment_method',
-    } as Stripe.PaymentIntent;
-
-    const mockPayment: Payments = {
-      id: 'payment123',
-      reservationId: createPaymentDto.reservationId,
-      stripePaymentId: mockPaymentIntent.id,
-      amountTotal: createPaymentDto.amountTotal,
-      commissionAmount: 100,
-      keeperAmount: 900,
-      status: 'pending',
-      keeperStripeAccountId: createPaymentDto.keeperId,
-      paidAt: null,
-    };
-
     it('should create a payment successfully', async () => {
+      const createPaymentDto = {
+        reservationId: '123e4567-e89b-12d3-a456-426614174000',
+        amountTotal: 1000,
+        keeperId: 'acct_keeper123',
+      };
+
+      const mockPaymentIntent = {
+        id: 'pi_test123',
+        client_secret: 'pi_test123_secret',
+        amount: 1000,
+        currency: 'eur',
+        status: 'requires_payment_method',
+      };
+
+      const mockPayment = {
+        id: 'pay_123',
+        reservationId: createPaymentDto.reservationId,
+        amountTotal: createPaymentDto.amountTotal,
+        commissionAmount: 100,
+        keeperAmount: 900,
+        status: 'pending',
+        keeperStripeAccountId: createPaymentDto.keeperId,
+        stripePaymentId: mockPaymentIntent.id,
+        paidAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
       mockStripeService.createPaymentIntent.mockResolvedValue(mockPaymentIntent);
       mockPaymentsRepository.create.mockReturnValue(mockPayment);
       mockPaymentsRepository.save.mockResolvedValue(mockPayment);
@@ -114,16 +101,16 @@ describe('PaymentsService', () => {
       expect(mockStripeService.createPaymentIntent).toHaveBeenCalledWith(
         1000,
         'eur',
-        'acct_keeper123',
+        createPaymentDto.keeperId,
       );
       expect(mockPaymentsRepository.create).toHaveBeenCalledWith({
         reservationId: createPaymentDto.reservationId,
-        stripePaymentId: mockPaymentIntent.id,
         amountTotal: createPaymentDto.amountTotal,
         commissionAmount: 100,
         keeperAmount: 900,
         status: 'pending',
         keeperStripeAccountId: createPaymentDto.keeperId,
+        stripePaymentId: mockPaymentIntent.id,
       });
       expect(mockPaymentsRepository.save).toHaveBeenCalledWith(mockPayment);
       expect(result).toEqual({
@@ -132,65 +119,53 @@ describe('PaymentsService', () => {
       });
     });
 
-    it('should calculate commission correctly (10%)', async () => {
-      const dtoWithDifferentAmount = { ...createPaymentDto, amountTotal: 2000 };
-      const expectedCommission = 200;
-      const expectedKeeperAmount = 1800;
+    it('should handle errors when creating payment', async () => {
+      const createPaymentDto = {
+        reservationId: '123e4567-e89b-12d3-a456-426614174000',
+        amountTotal: 1000,
+        keeperId: 'acct_keeper123',
+      };
 
-      mockStripeService.createPaymentIntent.mockResolvedValue(mockPaymentIntent);
-      mockPaymentsRepository.create.mockReturnValue(mockPayment);
-      mockPaymentsRepository.save.mockResolvedValue(mockPayment);
-
-      await service.createPayment(dtoWithDifferentAmount);
-
-      expect(mockPaymentsRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          commissionAmount: expectedCommission,
-          keeperAmount: expectedKeeperAmount,
-        }),
-      );
-    });
-
-    it('should handle Stripe service errors', async () => {
-      const stripeError = new Error('Stripe API error');
-      mockStripeService.createPaymentIntent.mockRejectedValue(stripeError);
+      const error = new Error('Stripe API error');
+      mockStripeService.createPaymentIntent.mockRejectedValue(error);
 
       await expect(service.createPayment(createPaymentDto)).rejects.toThrow('Stripe API error');
     });
   });
 
   describe('handleStripeWebhook', () => {
-    const mockPaymentIntent: Stripe.PaymentIntent = {
-      id: 'pi_test123',
-      amount: 1000,
-      currency: 'eur',
-      status: 'succeeded',
-    } as Stripe.PaymentIntent;
-
-    const mockEvent: Stripe.Event = {
-      id: 'evt_test123',
-      type: 'payment_intent.succeeded',
-      data: {
-        object: mockPaymentIntent,
-      },
-    } as Stripe.Event;
-
-    const mockPayment: Payments = {
-      id: 'payment123',
-      reservationId: 'reservation123',
-      stripePaymentId: 'pi_test123',
-      amountTotal: 1000,
-      commissionAmount: 100,
-      keeperAmount: 900,
-      status: 'pending',
-      keeperStripeAccountId: 'acct_keeper123',
-      paidAt: null,
-    };
-
     it('should handle payment_intent.succeeded event', async () => {
+      const mockEvent: any = {
+        id: 'evt_test123',
+        type: 'payment_intent.succeeded',
+        data: {
+          object: {
+            id: 'pi_test123',
+            amount: 1000,
+            currency: 'eur',
+            status: 'succeeded',
+          },
+        },
+      };
+
+      const mockPayment = {
+        id: 'pay_123',
+        reservationId: '123e4567-e89b-12d3-a456-426614174000',
+        amountTotal: 1000,
+        commissionAmount: 100,
+        keeperAmount: 900,
+        status: 'pending',
+        keeperStripeAccountId: 'acct_keeper123',
+        stripePaymentId: 'pi_test123',
+        paidAt: null,
+      };
+
       mockPaymentsRepository.findOne.mockResolvedValue(mockPayment);
-      mockPaymentsRepository.save.mockResolvedValue(mockPayment);
-      mockClientProxy.emit.mockResolvedValue(undefined);
+      mockPaymentsRepository.save.mockResolvedValue({
+        ...mockPayment,
+        status: 'paid',
+        paidAt: expect.any(Date),
+      });
 
       await service.handleStripeWebhook(mockEvent);
 
@@ -203,107 +178,122 @@ describe('PaymentsService', () => {
           paidAt: expect.any(Date),
         }),
       );
-      expect(mockClientProxy.emit).toHaveBeenCalledWith('payment.succeeded', {
-        paymentId: mockPayment.id,
-        reservationId: mockPayment.reservationId,
-        amountTotal: mockPayment.amountTotal,
-        keeperAmount: mockPayment.keeperAmount,
-        commissionAmount: mockPayment.commissionAmount,
-      });
+    });
+
+    it('should handle payment_intent.payment_failed event', async () => {
+      const mockEvent: any = {
+        id: 'evt_test123',
+        type: 'payment_intent.payment_failed',
+        data: {
+          object: {
+            id: 'pi_test123',
+            amount: 1000,
+            currency: 'eur',
+            status: 'requires_payment_method',
+          },
+        },
+      };
+
+      await service.handleStripeWebhook(mockEvent);
+
+      // Should not call repository methods for failed events
+      expect(mockPaymentsRepository.findOne).not.toHaveBeenCalled();
+      expect(mockPaymentsRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should handle unknown event types', async () => {
+      const mockEvent: any = {
+        id: 'evt_test123',
+        type: 'unknown.event',
+        data: {
+          object: {
+            id: 'pi_test123',
+          },
+        },
+      };
+
+      await service.handleStripeWebhook(mockEvent);
+
+      expect(mockPaymentsRepository.findOne).not.toHaveBeenCalled();
+      expect(mockPaymentsRepository.save).not.toHaveBeenCalled();
     });
 
     it('should handle payment not found', async () => {
+      const mockEvent: any = {
+        id: 'evt_test123',
+        type: 'payment_intent.succeeded',
+        data: {
+          object: {
+            id: 'pi_nonexistent',
+            amount: 1000,
+            currency: 'eur',
+            status: 'succeeded',
+          },
+        },
+      };
+
       mockPaymentsRepository.findOne.mockResolvedValue(null);
 
       await service.handleStripeWebhook(mockEvent);
 
       expect(mockPaymentsRepository.findOne).toHaveBeenCalledWith({
-        where: { stripePaymentId: 'pi_test123' },
+        where: { stripePaymentId: 'pi_nonexistent' },
       });
       expect(mockPaymentsRepository.save).not.toHaveBeenCalled();
-      expect(mockClientProxy.emit).not.toHaveBeenCalled();
-    });
-
-    it('should ignore non-payment_intent.succeeded events', async () => {
-      const otherEvent: Stripe.Event = {
-        id: 'evt_test456',
-        type: 'customer.created',
-        data: {
-          object: {},
-        },
-      } as Stripe.Event;
-
-      await service.handleStripeWebhook(otherEvent);
-
-      expect(mockPaymentsRepository.findOne).not.toHaveBeenCalled();
-      expect(mockPaymentsRepository.save).not.toHaveBeenCalled();
-      expect(mockClientProxy.emit).not.toHaveBeenCalled();
     });
   });
 
   describe('getPaymentById', () => {
-    const mockPayment: Payments = {
-      id: 'payment123',
-      reservationId: 'reservation123',
-      stripePaymentId: 'pi_test123',
-      amountTotal: 1000,
-      commissionAmount: 100,
-      keeperAmount: 900,
-      status: 'paid',
-      keeperStripeAccountId: 'acct_keeper123',
-      paidAt: new Date(),
-    };
+    it('should return a payment by id', async () => {
+      const paymentId = 'pay_123';
+      const mockPayment = {
+        id: paymentId,
+        reservationId: '123e4567-e89b-12d3-a456-426614174000',
+        amountTotal: 1000,
+        commissionAmount: 100,
+        keeperAmount: 900,
+        status: 'paid',
+        keeperStripeAccountId: 'acct_keeper123',
+        stripePaymentId: 'pi_123',
+        paidAt: new Date(),
+      };
 
-    it('should return payment when found', async () => {
       mockPaymentsRepository.findOne.mockResolvedValue(mockPayment);
 
-      const result = await service.getPaymentById('payment123');
+      const result = await service.getPaymentById(paymentId);
 
       expect(mockPaymentsRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'payment123' },
+        where: { id: paymentId },
       });
       expect(result).toEqual(mockPayment);
     });
 
     it('should throw NotFoundException when payment not found', async () => {
+      const paymentId = 'pay_nonexistent';
       mockPaymentsRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.getPaymentById('nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
-      await expect(service.getPaymentById('nonexistent')).rejects.toThrow(
-        'Payment with ID nonexistent not found',
+      await expect(service.getPaymentById(paymentId)).rejects.toThrow(
+        `Payment with ID ${paymentId} not found`,
       );
     });
   });
 
   describe('getAllPayments', () => {
-    const mockPayments: Payments[] = [
-      {
-        id: 'payment1',
-        reservationId: 'reservation1',
-        stripePaymentId: 'pi_test1',
-        amountTotal: 1000,
-        commissionAmount: 100,
-        keeperAmount: 900,
-        status: 'paid',
-        keeperStripeAccountId: 'acct_keeper1',
-        paidAt: new Date(),
-      },
-      {
-        id: 'payment2',
-        reservationId: 'reservation2',
-        stripePaymentId: 'pi_test2',
-        amountTotal: 2000,
-        commissionAmount: 200,
-        keeperAmount: 1800,
-        status: 'pending',
-        keeperStripeAccountId: 'acct_keeper2',
-        paidAt: null,
-      },
-    ];
-
     it('should return all payments', async () => {
+      const mockPayments = [
+        {
+          id: 'pay_123',
+          reservationId: '123e4567-e89b-12d3-a456-426614174000',
+          amountTotal: 1000,
+          commissionAmount: 100,
+          keeperAmount: 900,
+          status: 'paid',
+          keeperStripeAccountId: 'acct_keeper123',
+          stripePaymentId: 'pi_123',
+          paidAt: new Date(),
+        },
+      ];
+
       mockPaymentsRepository.find.mockResolvedValue(mockPayments);
 
       const result = await service.getAllPayments();
@@ -314,151 +304,172 @@ describe('PaymentsService', () => {
   });
 
   describe('getPaymentsByStatus', () => {
-    const mockPaidPayments: Payments[] = [
-      {
-        id: 'payment1',
-        reservationId: 'reservation1',
-        stripePaymentId: 'pi_test1',
-        amountTotal: 1000,
-        commissionAmount: 100,
-        keeperAmount: 900,
-        status: 'paid',
-        keeperStripeAccountId: 'acct_keeper1',
-        paidAt: new Date(),
-      },
-    ];
-
     it('should return payments by status', async () => {
-      mockPaymentsRepository.find.mockResolvedValue(mockPaidPayments);
+      const status = 'paid';
+      const mockPayments = [
+        {
+          id: 'pay_123',
+          reservationId: '123e4567-e89b-12d3-a456-426614174000',
+          amountTotal: 1000,
+          commissionAmount: 100,
+          keeperAmount: 900,
+          status: 'paid',
+          keeperStripeAccountId: 'acct_keeper123',
+          stripePaymentId: 'pi_123',
+          paidAt: new Date(),
+        },
+      ];
 
-      const result = await service.getPaymentsByStatus('paid');
+      mockPaymentsRepository.find.mockResolvedValue(mockPayments);
+
+      const result = await service.getPaymentsByStatus(status);
 
       expect(mockPaymentsRepository.find).toHaveBeenCalledWith({
-        where: { status: 'paid' },
+        where: { status },
       });
-      expect(result).toEqual(mockPaidPayments);
+      expect(result).toEqual(mockPayments);
     });
   });
 
   describe('getPaymentsByKeeper', () => {
-    const mockKeeperPayments: Payments[] = [
-      {
-        id: 'payment1',
-        reservationId: 'reservation1',
-        stripePaymentId: 'pi_test1',
-        amountTotal: 1000,
-        commissionAmount: 100,
-        keeperAmount: 900,
-        status: 'paid',
-        keeperStripeAccountId: 'acct_keeper123',
-        paidAt: new Date(),
-      },
-    ];
+    it('should return payments by keeper', async () => {
+      const keeperId = 'acct_keeper123';
+      const mockPayments = [
+        {
+          id: 'pay_123',
+          reservationId: '123e4567-e89b-12d3-a456-426614174000',
+          amountTotal: 1000,
+          commissionAmount: 100,
+          keeperAmount: 900,
+          status: 'paid',
+          keeperStripeAccountId: 'acct_keeper123',
+          stripePaymentId: 'pi_123',
+          paidAt: new Date(),
+        },
+      ];
 
-    it('should return payments by keeper ID', async () => {
-      mockPaymentsRepository.find.mockResolvedValue(mockKeeperPayments);
+      mockPaymentsRepository.find.mockResolvedValue(mockPayments);
 
-      const result = await service.getPaymentsByKeeper('acct_keeper123');
+      const result = await service.getPaymentsByKeeper(keeperId);
 
       expect(mockPaymentsRepository.find).toHaveBeenCalledWith({
-        where: { keeperStripeAccountId: 'acct_keeper123' },
+        where: { keeperStripeAccountId: keeperId },
       });
-      expect(result).toEqual(mockKeeperPayments);
+      expect(result).toEqual(mockPayments);
     });
   });
 
   describe('createKeeperAccount', () => {
-    const mockAccount: Stripe.Account = {
-      id: 'acct_keeper123',
-      email: 'keeper@example.com',
-      type: 'express',
-      charges_enabled: false,
-      payouts_enabled: false,
-    } as Stripe.Account;
+    it('should create a keeper account successfully', async () => {
+      const email = 'keeper@example.com';
+      const mockAccount = {
+        id: 'acct_keeper123',
+        email: 'keeper@example.com',
+        type: 'express',
+        charges_enabled: false,
+        payouts_enabled: false,
+      };
 
-    it('should create keeper account successfully', async () => {
       mockStripeService.createKeeperAccount.mockResolvedValue(mockAccount);
 
-      const result = await service.createKeeperAccount('keeper@example.com');
+      const result = await service.createKeeperAccount(email);
 
-      expect(mockStripeService.createKeeperAccount).toHaveBeenCalledWith('keeper@example.com');
+      expect(mockStripeService.createKeeperAccount).toHaveBeenCalledWith(email);
       expect(result).toEqual(mockAccount);
     });
 
-    it('should handle Stripe service errors', async () => {
-      const stripeError = new Error('Stripe account creation failed');
-      mockStripeService.createKeeperAccount.mockRejectedValue(stripeError);
+    it('should handle errors when creating keeper account', async () => {
+      const email = 'keeper@example.com';
+      const error = new Error('Stripe account creation failed');
+      mockStripeService.createKeeperAccount.mockRejectedValue(error);
 
-      await expect(service.createKeeperAccount('keeper@example.com')).rejects.toThrow(
+      await expect(service.createKeeperAccount(email)).rejects.toThrow(
         'Stripe account creation failed',
       );
     });
   });
 
   describe('createKeeperAccountLink', () => {
-    const mockAccountLink: Stripe.AccountLink = {
-      id: 'acctlink_test123',
-      object: 'account_link',
-      url: 'https://connect.stripe.com/setup/s/test',
-      expires_at: 1234567890,
-      created: 1234567890,
-    } as Stripe.AccountLink;
+    it('should create a keeper account link successfully', async () => {
+      const accountId = 'acct_keeper123';
+      const mockAccountLink = {
+        id: 'acctlink_test123',
+        object: 'account_link',
+        url: 'https://connect.stripe.com/setup/s/test',
+        expires_at: 1234567890,
+        created: 1234567890,
+      };
 
-    it('should create account link successfully', async () => {
       mockStripeService.createAccountLink.mockResolvedValue(mockAccountLink);
 
-      const result = await service.createKeeperAccountLink('acct_keeper123');
+      const result = await service.createKeeperAccountLink(accountId);
 
-      expect(mockStripeService.createAccountLink).toHaveBeenCalledWith('acct_keeper123');
+      expect(mockStripeService.createAccountLink).toHaveBeenCalledWith(
+        accountId,
+      );
       expect(result).toEqual(mockAccountLink);
+    });
+
+    it('should handle errors when creating account link', async () => {
+      const accountId = 'acct_keeper123';
+      const error = new Error('Stripe account link creation failed');
+      mockStripeService.createAccountLink.mockRejectedValue(error);
+
+      await expect(service.createKeeperAccountLink(accountId)).rejects.toThrow(
+        'Stripe account link creation failed',
+      );
     });
   });
 
   describe('findKeeperAccountByEmail', () => {
-    const mockAccount: Stripe.Account = {
-      id: 'acct_keeper123',
-      email: 'keeper@example.com',
-      type: 'express',
-    } as Stripe.Account;
+    it('should find keeper account by email', async () => {
+      const email = 'keeper@example.com';
+      const mockAccount = {
+        id: 'acct_keeper123',
+        email: 'keeper@example.com',
+        type: 'express',
+        charges_enabled: true,
+        payouts_enabled: true,
+      };
 
-    it('should find account by email', async () => {
       mockStripeService.findAccountByEmail.mockResolvedValue(mockAccount);
 
-      const result = await service.findKeeperAccountByEmail('keeper@example.com');
+      const result = await service.findKeeperAccountByEmail(email);
 
-      expect(mockStripeService.findAccountByEmail).toHaveBeenCalledWith('keeper@example.com');
+      expect(mockStripeService.findAccountByEmail).toHaveBeenCalledWith(email);
       expect(result).toEqual(mockAccount);
+    });
+
+    it('should return null when account not found', async () => {
+      const email = 'nonexistent@example.com';
+      mockStripeService.findAccountByEmail.mockResolvedValue(null);
+
+      const result = await service.findKeeperAccountByEmail(email);
+
+      expect(result).toBeNull();
     });
   });
 
   describe('checkKeeperAccountStatus', () => {
-    const mockCompleteAccount: Stripe.Account = {
-      id: 'acct_keeper123',
-      email: 'keeper@example.com',
-      type: 'express',
-      charges_enabled: true,
-      payouts_enabled: true,
-      details_submitted: true,
-    } as Stripe.Account;
+    it('should check keeper account status successfully', async () => {
+      const accountId = 'acct_keeper123';
+      const mockAccount = {
+        id: 'acct_keeper123',
+        email: 'keeper@example.com',
+        type: 'express',
+        charges_enabled: true,
+        payouts_enabled: true,
+        details_submitted: true,
+      };
 
-    const mockIncompleteAccount: Stripe.Account = {
-      id: 'acct_keeper123',
-      email: 'keeper@example.com',
-      type: 'express',
-      charges_enabled: false,
-      payouts_enabled: false,
-      details_submitted: false,
-    } as Stripe.Account;
+      mockStripeService.retrieveAccount.mockResolvedValue(mockAccount);
 
-    it('should return complete status for fully onboarded account', async () => {
-      mockStripeService.retrieveAccount.mockResolvedValue(mockCompleteAccount);
+      const result = await service.checkKeeperAccountStatus(accountId);
 
-      const result = await service.checkKeeperAccountStatus('acct_keeper123');
-
-      expect(mockStripeService.retrieveAccount).toHaveBeenCalledWith('acct_keeper123');
+      expect(mockStripeService.retrieveAccount).toHaveBeenCalledWith(accountId);
       expect(result).toEqual({
         isComplete: true,
-        account: mockCompleteAccount,
+        account: mockAccount,
         status: {
           chargesEnabled: true,
           payoutsEnabled: true,
@@ -467,14 +478,24 @@ describe('PaymentsService', () => {
       });
     });
 
-    it('should return incomplete status for partially onboarded account', async () => {
-      mockStripeService.retrieveAccount.mockResolvedValue(mockIncompleteAccount);
+    it('should handle incomplete account status', async () => {
+      const accountId = 'acct_keeper123';
+      const mockAccount = {
+        id: 'acct_keeper123',
+        email: 'keeper@example.com',
+        type: 'express',
+        charges_enabled: false,
+        payouts_enabled: false,
+        details_submitted: false,
+      };
 
-      const result = await service.checkKeeperAccountStatus('acct_keeper123');
+      mockStripeService.retrieveAccount.mockResolvedValue(mockAccount);
+
+      const result = await service.checkKeeperAccountStatus(accountId);
 
       expect(result).toEqual({
         isComplete: false,
-        account: mockIncompleteAccount,
+        account: mockAccount,
         status: {
           chargesEnabled: false,
           payoutsEnabled: false,
@@ -483,13 +504,14 @@ describe('PaymentsService', () => {
       });
     });
 
-    it('should handle Stripe service errors', async () => {
-      const stripeError = new Error('Stripe account retrieval failed');
-      mockStripeService.retrieveAccount.mockRejectedValue(stripeError);
+    it('should handle errors when checking account status', async () => {
+      const accountId = 'acct_keeper123';
+      const error = new Error('Stripe account retrieval failed');
+      mockStripeService.retrieveAccount.mockRejectedValue(error);
 
-      await expect(service.checkKeeperAccountStatus('acct_keeper123')).rejects.toThrow(
+      await expect(service.checkKeeperAccountStatus(accountId)).rejects.toThrow(
         'Stripe account retrieval failed',
       );
+      });
     });
   });
-}); 

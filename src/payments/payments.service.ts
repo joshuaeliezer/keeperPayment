@@ -137,7 +137,10 @@ export class PaymentsService {
       });
       return account;
     } catch (error) {
-      this.logger.error(`Erreur lors de la création du compte keeper: ${error.message}`, error.stack);
+      this.logger.error(
+        `Erreur lors de la création du compte keeper: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -155,8 +158,9 @@ export class PaymentsService {
   async checkKeeperAccountStatus(accountId: string) {
     try {
       const account = await this.stripeService.retrieveAccount(accountId);
-      const isOnboardingComplete = account.charges_enabled && account.payouts_enabled;
-      
+      const isOnboardingComplete =
+        account.charges_enabled && account.payouts_enabled;
+
       return {
         isComplete: isOnboardingComplete,
         account,
@@ -164,10 +168,12 @@ export class PaymentsService {
           chargesEnabled: account.charges_enabled,
           payoutsEnabled: account.payouts_enabled,
           detailsSubmitted: account.details_submitted,
-        }
+        },
       };
     } catch (error) {
-      this.logger.error(`Erreur lors de la vérification du statut du compte: ${error.message}`);
+      this.logger.error(
+        `Erreur lors de la vérification du statut du compte: ${error.message}`,
+      );
       throw error;
     }
   }

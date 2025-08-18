@@ -11,9 +11,11 @@ export class StripeService {
   constructor(private configService: ConfigService) {
     const stripeKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (!stripeKey) {
-      throw new Error('STRIPE_SECRET_KEY is not defined in environment variables');
+      throw new Error(
+        'STRIPE_SECRET_KEY is not defined in environment variables',
+      );
     }
-    
+
     this.stripe = new Stripe(stripeKey, {
       apiVersion: '2023-10-16',
     });
@@ -60,7 +62,7 @@ export class StripeService {
 
     // S'assurer que l'URL de base ne se termine pas par un slash
     const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
-    
+
     const accountLink = await this.stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${baseUrl}/payments/keeper/onboarding/refresh?account_id=${accountId}`,
@@ -87,7 +89,7 @@ export class StripeService {
       limit: 100,
     });
 
-    return accounts.data.find(account => account.email === email) || null;
+    return accounts.data.find((account) => account.email === email) || null;
   }
 
   async retrieveAccount(accountId: string): Promise<Stripe.Account> {
@@ -96,8 +98,10 @@ export class StripeService {
       this.logger.log(`Compte Stripe récupéré avec succès - ID: ${accountId}`);
       return account;
     } catch (error) {
-      this.logger.error(`Erreur lors de la récupération du compte Stripe: ${error.message}`);
+      this.logger.error(
+        `Erreur lors de la récupération du compte Stripe: ${error.message}`,
+      );
       throw error;
     }
   }
-} 
+}

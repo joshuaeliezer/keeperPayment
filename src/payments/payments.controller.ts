@@ -1,141 +1,182 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
-  Headers,
-  RawBodyRequest,
-  Req,
-  Get,
   Param,
-  Query,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { Request } from 'express';
-import Stripe from 'stripe';
-import { Payments } from './entities/payment.entity';
 import { CreateKeeperAccountDto } from '../stripe/dto/create-keeper-account.dto';
-import { Logger } from '@nestjs/common';
+import { Request } from 'express';
 
 @Controller('payments')
 export class PaymentsController {
-  private readonly logger = new Logger(PaymentsController.name);
-
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post()
   async createPayment(@Body() createPaymentDto: CreatePaymentDto) {
-    return this.paymentsService.createPayment(createPaymentDto);
+    try {
+      return await this.paymentsService.createPayment(createPaymentDto);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors de la création du paiement',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 
   @Post('webhooks/stripe')
-  async handleStripeWebhook(
-    @Req() request: RawBodyRequest<Request>,
-    @Headers('stripe-signature') signature: string,
-  ) {
-    const event = request.rawBody;
-    if (!event) {
-      throw new Error('No event body received');
-    }
-
+  async handleStripeWebhook(@Body() request: Request & { rawBody: Buffer }) {
     try {
-      const stripeEvent = JSON.parse(event.toString()) as Stripe.Event;
-      await this.paymentsService.handleStripeWebhook(stripeEvent);
-      return { received: true };
-    } catch (err) {
-      throw new Error(`Webhook Error: ${err.message}`);
+      if (!request.rawBody) {
+        throw new Error('No webhook body provided');
+      }
+
+      let event;
+      try {
+        event = JSON.parse(request.rawBody.toString());
+      } catch (err) {
+        throw new Error('Invalid JSON in webhook body');
+      }
+
+      return await this.paymentsService.handleStripeWebhook(event);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors du traitement du webhook',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
   @Get(':id')
-  async getPaymentById(@Param('id') id: string): Promise<Payments> {
-    return this.paymentsService.getPaymentById(id);
+  async getPaymentById(@Param('id') id: string) {
+    try {
+      return await this.paymentsService.getPaymentById(id);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors de la récupération du paiement',
+        HttpStatus.NOT_FOUND,
+      );
+    }
   }
 
   @Get()
-  async getAllPayments(): Promise<Payments[]> {
-    return this.paymentsService.getAllPayments();
+  async getAllPayments() {
+    try {
+      return await this.paymentsService.getAllPayments();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors de la récupération des paiements',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('status/:status')
-  async getPaymentsByStatus(
-    @Param('status') status: 'pending' | 'paid' | 'failed' | 'refunded',
-  ): Promise<Payments[]> {
-    return this.paymentsService.getPaymentsByStatus(status);
+  async getPaymentsByStatus(@Param('status') status: 'pending' | 'paid' | 'failed' | 'refunded') {
+    try {
+      return await this.paymentsService.getPaymentsByStatus(status);
+    } catch (error) {
+      throw new HttpException(
+        error.message ||
+          'Erreur lors de la récupération des paiements par statut',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('keeper/:keeperId')
-  async getPaymentsByKeeper(
-    @Param('keeperId') keeperId: string,
-  ): Promise<Payments[]> {
-    return this.paymentsService.getPaymentsByKeeper(keeperId);
+  async getPaymentsByKeeper(@Param('keeperId') keeperId: string) {
+    try {
+      return await this.paymentsService.getPaymentsByKeeper(keeperId);
+    } catch (error) {
+      throw new HttpException(
+        error.message ||
+          'Erreur lors de la récupération des paiements par keeper',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Post('keeper/account')
   async createKeeperAccount(
     @Body() createKeeperAccountDto: CreateKeeperAccountDto,
   ) {
-    console.log('compte keeper:', createKeeperAccountDto);
-    return this.paymentsService.createKeeperAccount(
-      createKeeperAccountDto.email,
-    );
+    try {
+      return await this.paymentsService.createKeeperAccount(
+        createKeeperAccountDto.email,
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors de la création du compte keeper',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 
-  @Get('keeper/account/:accountId/link')
-  async createKeeperAccountLink(@Param('accountId') accountId: string) {
-    console.log('compte keeper:', accountId);
-    return this.paymentsService.createKeeperAccountLink(accountId);
+  @Get('keeper/account/:id/link')
+  async createKeeperAccountLink(@Param('id') accountId: string) {
+    try {
+      return await this.paymentsService.createKeeperAccountLink(accountId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors de la création du lien de compte',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('keeper/account/email/:email')
   async findKeeperAccountByEmail(@Param('email') email: string) {
-    return this.paymentsService.findKeeperAccountByEmail(email);
+    try {
+      return await this.paymentsService.findKeeperAccountByEmail(email);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Erreur lors de la recherche du compte keeper',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('keeper/onboarding/success')
-  async handleOnboardingSuccess(@Query('account_id') accountId: string) {
-    this.logger.log(
-      `Route /payments/keeper/onboarding/success appelée avec account_id: ${accountId}`,
-    );
+  async handleOnboardingSuccess(@Param('account_id') accountId: string) {
     try {
-      const accountStatus = await this.paymentsService.checkKeeperAccountStatus(accountId);
-      
+      const accountStatus =
+        await this.paymentsService.checkKeeperAccountStatus(accountId);
+
       if (accountStatus.isComplete) {
-        this.logger.log(`Onboarding complet pour le compte: ${accountId}`);
         return {
           status: 'success',
           message: 'Onboarding complété avec succès',
           deepLink: `keeperApp://onboarding/success?account_id=${accountId}`,
           accountId,
-          accountStatus: accountStatus.status
+          accountStatus: accountStatus.status,
         };
       } else {
-        this.logger.log(`Onboarding incomplet pour le compte: ${accountId}`);
         return {
           status: 'incomplete',
           message: "L'onboarding n'est pas encore complet",
           deepLink: `keeperapp://onboarding/refresh?account_id=${accountId}`,
           accountId,
-          accountStatus: accountStatus.status
+          accountStatus: accountStatus.status,
         };
       }
     } catch (error) {
-      this.logger.error(`Erreur lors de la vérification du statut du compte: ${error.message}`);
       return {
         status: 'error',
         message: 'Erreur lors de la vérification du statut du compte',
         deepLink: `keeperpayment://onboarding/error?account_id=${accountId}`,
         accountId,
-        error: error.message
+        error: error.message,
       };
     }
   }
 
   @Get('keeper/onboarding/refresh')
-  async handleOnboardingRefresh(@Query('account_id') accountId: string) {
-    this.logger.log(
-      `Route /payments/keeper/onboarding/refresh appelée avec account_id: ${accountId}`,
-    );
+  async handleOnboardingRefresh(@Param('account_id') accountId: string) {
     return {
       status: 'refresh_needed',
       message: "Veuillez compléter l'onboarding",

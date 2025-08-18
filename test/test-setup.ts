@@ -27,11 +27,13 @@ jest.mock('stripe', () => {
         payouts_enabled: false,
       }),
       list: jest.fn().mockResolvedValue({
-        data: [{
-          id: 'acct_keeper123',
-          email: 'keeper@example.com',
-          type: 'express',
-        }],
+        data: [
+          {
+            id: 'acct_keeper123',
+            email: 'keeper@example.com',
+            type: 'express',
+          },
+        ],
       }),
       retrieve: jest.fn().mockResolvedValue({
         id: 'acct_keeper123',

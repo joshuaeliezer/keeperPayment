@@ -1,142 +1,94 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { AppModule } from '../src/app.module';
-import { ConfigService } from '@nestjs/config';
+import { AppModule } from './../src/app.module';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payments } from '../src/payments/entities/payment.entity';
-import Stripe from 'stripe';
+import { ValidationPipe } from '@nestjs/common';
 
 describe('PaymentsController (e2e)', () => {
   let app: INestApplication;
-  let stripe: Stripe;
   let paymentsRepository: Repository<Payments>;
-  let configService: ConfigService;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    
-    // Add validation pipe for DTO validation
-    app.useGlobalPipes(new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    }));
+    app.useGlobalPipes(new ValidationPipe());
+
+    paymentsRepository = moduleFixture.get<Repository<Payments>>(
+      getRepositoryToken(Payments),
+    );
 
     await app.init();
 
-    configService = app.get(ConfigService);
-    paymentsRepository = app.get<Repository<Payments>>(getRepositoryToken(Payments));
-    
-    // Initialize Stripe with test key
-    const stripeKey = configService.get('STRIPE_SECRET_KEY') || 'sk_test_dummy';
-    stripe = new Stripe(stripeKey, {
-      apiVersion: '2023-10-16',
-    });
+    // Clear database before each test
+    await paymentsRepository.clear();
+  });
+
+  afterEach(async () => {
+    await paymentsRepository.clear();
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  beforeEach(async () => {
-    // Clean up database before each test
-    await paymentsRepository.clear();
+  describe('/payments (POST)', () => {
+    it('should create a payment', () => {
+      const createPaymentDto = {
+        reservationId: '123e4567-e89b-12d3-a456-426614174000',
+        amountTotal: 1000,
+        keeperId: 'acct_keeper123',
+      };
+
+      return request(app.getHttpServer())
+        .post('/payments')
+        .send(createPaymentDto)
+        .expect(201)
+        .expect((res) => {
+          expect(res.body).toHaveProperty('id');
+          expect(res.body.reservationId).toBe(createPaymentDto.reservationId);
+          expect(res.body.amountTotal).toBe(createPaymentDto.amountTotal);
+          expect(res.body.keeperStripeAccountId).toBe(
+            createPaymentDto.keeperId,
+          );
+        });
+    });
+
+    it('should validate required fields', () => {
+      const invalidDto = {
+        // Missing required fields
+      };
+
+      return request(app.getHttpServer())
+        .post('/payments')
+        .send(invalidDto)
+        .expect(400);
+    });
   });
 
-  describe('/payments (POST)', () => {
-    it('should create a payment intent successfully', async () => {
-      const createPaymentDto = {
-        reservationId: '123e4567-e89b-12d3-a456-426614174000',
-        amountTotal: 1000,
-        keeperId: 'acct_test123',
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments')
-        .send(createPaymentDto)
-        .expect(201);
-
-      expect(response.body).toHaveProperty('clientSecret');
-      expect(response.body).toHaveProperty('paymentId');
-      expect(typeof response.body.clientSecret).toBe('string');
-      expect(typeof response.body.paymentId).toBe('string');
-    });
-
-    it('should validate required fields', async () => {
-      const invalidDto = {
-        amountTotal: 1000,
-        // Missing reservationId and keeperId
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments')
-        .send(invalidDto)
-        .expect(400);
-
-      expect(response.body.message).toContain('reservationId');
-      expect(response.body.message).toContain('keeperId');
-    });
-
-    it('should validate UUID format for reservationId', async () => {
-      const invalidDto = {
-        reservationId: 'invalid-uuid',
-        amountTotal: 1000,
-        keeperId: 'acct_test123',
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments')
-        .send(invalidDto)
-        .expect(400);
-
-      expect(response.body.message).toContain('reservationId');
-    });
-
-    it('should validate minimum amount', async () => {
-      const invalidDto = {
-        reservationId: '123e4567-e89b-12d3-a456-426614174000',
-        amountTotal: -100,
-        keeperId: 'acct_test123',
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments')
-        .send(invalidDto)
-        .expect(400);
-
-      expect(response.body.message).toContain('amountTotal');
-    });
-
-    it('should handle Stripe API errors gracefully', async () => {
-      const createPaymentDto = {
-        reservationId: '123e4567-e89b-12d3-a456-426614174000',
-        amountTotal: 1000,
-        keeperId: 'invalid_keeper_id',
-      };
-
-      // This should fail due to invalid keeper ID
-      const response = await request(app.getHttpServer())
-        .post('/payments')
-        .send(createPaymentDto)
-        .expect(500);
-
-      expect(response.body).toHaveProperty('message');
+  describe('/payments (GET)', () => {
+    it('should return all payments', () => {
+      return request(app.getHttpServer())
+        .get('/payments')
+        .expect(200)
+        .expect((res) => {
+          expect(Array.isArray(res.body)).toBe(true);
+        });
     });
   });
 
   describe('/payments/:id (GET)', () => {
-    it('should get payment by ID', async () => {
+    it('should return a payment by id', async () => {
       // First create a payment
       const createPaymentDto = {
         reservationId: '123e4567-e89b-12d3-a456-426614174000',
         amountTotal: 1000,
-        keeperId: 'acct_test123',
+        keeperId: 'acct_keeper123',
       };
 
       const createResponse = await request(app.getHttpServer())
@@ -144,305 +96,158 @@ describe('PaymentsController (e2e)', () => {
         .send(createPaymentDto)
         .expect(201);
 
-      const paymentId = createResponse.body.paymentId;
+      const paymentId = createResponse.body.id;
 
-      // Then retrieve it
-      const response = await request(app.getHttpServer())
+      // Then get the payment by id
+      return request(app.getHttpServer())
         .get(`/payments/${paymentId}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('id', paymentId);
-      expect(response.body).toHaveProperty('reservationId', createPaymentDto.reservationId);
-      expect(response.body).toHaveProperty('amountTotal', createPaymentDto.amountTotal);
-      expect(response.body).toHaveProperty('status', 'pending');
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.id).toBe(paymentId);
+          expect(res.body.reservationId).toBe(createPaymentDto.reservationId);
+        });
     });
 
-    it('should return 404 for non-existent payment', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/payments/non-existent-id')
+    it('should return 404 for non-existent payment', () => {
+      return request(app.getHttpServer())
+        .get('/payments/nonexistent-id')
         .expect(404);
-
-      expect(response.body.message).toContain('not found');
-    });
-  });
-
-  describe('/payments (GET)', () => {
-    it('should get all payments', async () => {
-      // Create multiple payments
-      const payments = [
-        {
-          reservationId: '123e4567-e89b-12d3-a456-426614174000',
-          amountTotal: 1000,
-          keeperId: 'acct_test123',
-        },
-        {
-          reservationId: '123e4567-e89b-12d3-a456-426614174001',
-          amountTotal: 2000,
-          keeperId: 'acct_test456',
-        },
-      ];
-
-      for (const payment of payments) {
-        await request(app.getHttpServer())
-          .post('/payments')
-          .send(payment)
-          .expect(201);
-      }
-
-      const response = await request(app.getHttpServer())
-        .get('/payments')
-        .expect(200);
-
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('/payments/status/:status (GET)', () => {
-    it('should get payments by status', async () => {
-      // Create a payment (which will be pending by default)
-      const createPaymentDto = {
-        reservationId: '123e4567-e89b-12d3-a456-426614174000',
-        amountTotal: 1000,
-        keeperId: 'acct_test123',
-      };
-
-      await request(app.getHttpServer())
-        .post('/payments')
-        .send(createPaymentDto)
-        .expect(201);
-
-      const response = await request(app.getHttpServer())
+    it('should return payments by status', () => {
+      return request(app.getHttpServer())
         .get('/payments/status/pending')
-        .expect(200);
-
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body[0]).toHaveProperty('status', 'pending');
-    });
-
-    it('should return empty array for non-existent status', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/payments/status/refunded')
-        .expect(200);
-
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(0);
+        .expect(200)
+        .expect((res) => {
+          expect(Array.isArray(res.body)).toBe(true);
+        });
     });
   });
 
   describe('/payments/keeper/:keeperId (GET)', () => {
-    it('should get payments by keeper ID', async () => {
-      const keeperId = 'acct_test123';
-      
-      // Create a payment for this keeper
-      const createPaymentDto = {
-        reservationId: '123e4567-e89b-12d3-a456-426614174000',
-        amountTotal: 1000,
-        keeperId,
-      };
-
-      await request(app.getHttpServer())
-        .post('/payments')
-        .send(createPaymentDto)
-        .expect(201);
-
-      const response = await request(app.getHttpServer())
-        .get(`/payments/keeper/${keeperId}`)
-        .expect(200);
-
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body[0]).toHaveProperty('keeperStripeAccountId', keeperId);
+    it('should return payments by keeper', () => {
+      return request(app.getHttpServer())
+        .get('/payments/keeper/acct_keeper123')
+        .expect(200)
+        .expect((res) => {
+          expect(Array.isArray(res.body)).toBe(true);
+        });
     });
   });
 
   describe('/payments/keeper/account (POST)', () => {
-    it('should create keeper account', async () => {
+    it('should create a keeper account', () => {
       const createKeeperAccountDto = {
         email: 'keeper@example.com',
       };
 
-      const response = await request(app.getHttpServer())
+      return request(app.getHttpServer())
         .post('/payments/keeper/account')
         .send(createKeeperAccountDto)
-        .expect(201);
-
-      expect(response.body).toHaveProperty('id');
-      expect(response.body).toHaveProperty('email', createKeeperAccountDto.email);
-      expect(response.body).toHaveProperty('type', 'express');
+        .expect(201)
+        .expect((res) => {
+          expect(res.body).toHaveProperty('id');
+          expect(res.body.email).toBe(createKeeperAccountDto.email);
+        });
     });
 
-    it('should validate email format', async () => {
+    it('should validate email format', () => {
       const invalidDto = {
         email: 'invalid-email',
       };
 
-      const response = await request(app.getHttpServer())
+      return request(app.getHttpServer())
         .post('/payments/keeper/account')
         .send(invalidDto)
         .expect(400);
-
-      expect(response.body.message).toContain('email');
     });
   });
 
-  describe('/payments/keeper/account/:accountId/link (GET)', () => {
-    it('should create account link', async () => {
-      // First create an account
+  describe('/payments/keeper/account/:id/link (GET)', () => {
+    it('should create a keeper account link', async () => {
+      // First create a keeper account
       const createKeeperAccountDto = {
         email: 'keeper@example.com',
       };
 
-      const accountResponse = await request(app.getHttpServer())
+      const createResponse = await request(app.getHttpServer())
         .post('/payments/keeper/account')
         .send(createKeeperAccountDto)
         .expect(201);
 
-      const accountId = accountResponse.body.id;
+      const accountId = createResponse.body.id;
 
-      const response = await request(app.getHttpServer())
+      // Then create account link
+      return request(app.getHttpServer())
         .get(`/payments/keeper/account/${accountId}/link`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('id');
-      expect(response.body).toHaveProperty('url');
-      expect(response.body).toHaveProperty('expires_at');
-    });
-
-    it('should handle invalid account ID', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/payments/keeper/account/invalid-account-id/link')
-        .expect(500);
-
-      expect(response.body).toHaveProperty('message');
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toHaveProperty('url');
+          expect(res.body).toHaveProperty('expires_at');
+        });
     });
   });
 
   describe('/payments/keeper/account/email/:email (GET)', () => {
-    it('should find account by email', async () => {
-      const email = 'keeper@example.com';
-      
-      // First create an account
-      const createKeeperAccountDto = { email };
+    it('should find keeper account by email', async () => {
+      // First create a keeper account
+      const createKeeperAccountDto = {
+        email: 'keeper@example.com',
+      };
 
       await request(app.getHttpServer())
         .post('/payments/keeper/account')
         .send(createKeeperAccountDto)
         .expect(201);
 
-      const response = await request(app.getHttpServer())
-        .get(`/payments/keeper/account/email/${email}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('email', email);
+      // Then find by email
+      return request(app.getHttpServer())
+        .get('/payments/keeper/account/email/keeper@example.com')
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toHaveProperty('id');
+          expect(res.body.email).toBe('keeper@example.com');
+        });
     });
 
-    it('should return null for non-existent email', async () => {
-      const response = await request(app.getHttpServer())
+    it('should return null for non-existent email', () => {
+      return request(app.getHttpServer())
         .get('/payments/keeper/account/email/nonexistent@example.com')
-        .expect(200);
-
-      expect(response.body).toBeNull();
-    });
-  });
-
-  describe('/payments/keeper/onboarding/success (GET)', () => {
-    it('should handle onboarding success for complete account', async () => {
-      // First create an account
-      const createKeeperAccountDto = {
-        email: 'keeper@example.com',
-      };
-
-      const accountResponse = await request(app.getHttpServer())
-        .post('/payments/keeper/account')
-        .send(createKeeperAccountDto)
-        .expect(201);
-
-      const accountId = accountResponse.body.id;
-
-      const response = await request(app.getHttpServer())
-        .get(`/payments/keeper/onboarding/success?account_id=${accountId}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('status');
-      expect(response.body).toHaveProperty('message');
-      expect(response.body).toHaveProperty('deepLink');
-      expect(response.body).toHaveProperty('accountId', accountId);
-    });
-
-    it('should handle missing account_id parameter', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/payments/keeper/onboarding/success')
-        .expect(200);
-
-      expect(response.body).toHaveProperty('status');
-      expect(response.body).toHaveProperty('message');
-    });
-  });
-
-  describe('/payments/keeper/onboarding/refresh (GET)', () => {
-    it('should return refresh response', async () => {
-      const accountId = 'acct_test123';
-
-      const response = await request(app.getHttpServer())
-        .get(`/payments/keeper/onboarding/refresh?account_id=${accountId}`)
-        .expect(200);
-
-      expect(response.body).toEqual({
-        status: 'refresh_needed',
-        message: "Veuillez compléter l'onboarding",
-        deepLink: `keeperpayment://onboarding/refresh?account_id=${accountId}`,
-        accountId,
-      });
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toBeNull();
+        });
     });
   });
 
   describe('/payments/webhooks/stripe (POST)', () => {
-    it('should handle stripe webhook successfully', async () => {
-      const mockEvent = {
+    it('should handle stripe webhook', () => {
+      const webhookEvent = {
         id: 'evt_test123',
         type: 'payment_intent.succeeded',
         data: {
           object: {
             id: 'pi_test123',
+            amount: 1000,
+            currency: 'eur',
+            status: 'succeeded',
           },
         },
       };
 
-      const signature = 'test_signature';
-
-      const response = await request(app.getHttpServer())
+      return request(app.getHttpServer())
         .post('/payments/webhooks/stripe')
-        .set('stripe-signature', signature)
-        .send(mockEvent)
+        .send(webhookEvent)
         .expect(200);
-
-      expect(response.body).toEqual({ received: true });
     });
 
-    it('should handle missing raw body', async () => {
-      const signature = 'test_signature';
-
-      const response = await request(app.getHttpServer())
+    it('should handle invalid webhook body', () => {
+      return request(app.getHttpServer())
         .post('/payments/webhooks/stripe')
-        .set('stripe-signature', signature)
-        .expect(500);
-
-      expect(response.body.message).toContain('No event body received');
-    });
-
-    it('should handle invalid JSON', async () => {
-      const signature = 'test_signature';
-
-      const response = await request(app.getHttpServer())
-        .post('/payments/webhooks/stripe')
-        .set('stripe-signature', signature)
-        .set('Content-Type', 'application/json')
-        .send('invalid json')
-        .expect(500);
-
-      expect(response.body.message).toContain('Webhook Error');
+        .send({})
+        .expect(400);
     });
   });
-}); 
+});

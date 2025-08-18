@@ -22,17 +22,21 @@ export const setupTestDatabase = async (): Promise<DataSource> => {
   return dataSource;
 };
 
-export const teardownTestDatabase = async (dataSource: DataSource): Promise<void> => {
+export const teardownTestDatabase = async (
+  dataSource: DataSource,
+): Promise<void> => {
   if (dataSource.isInitialized) {
     await dataSource.destroy();
   }
 };
 
-export const clearTestDatabase = async (dataSource: DataSource): Promise<void> => {
+export const clearTestDatabase = async (
+  dataSource: DataSource,
+): Promise<void> => {
   if (dataSource.isInitialized) {
     const entityManager = dataSource.manager;
     const entities = dataSource.entityMetadatas;
-    
+
     for (const entity of entities) {
       const repository = entityManager.getRepository(entity.name);
       await repository.clear();

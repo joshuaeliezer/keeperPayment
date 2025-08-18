@@ -112,7 +112,7 @@ describe('CreatePaymentDto', () => {
     it('should pass validation with decimal amount', async () => {
       const dto = new CreatePaymentDto();
       dto.reservationId = '123e4567-e89b-12d3-a456-426614174000';
-      dto.amountTotal = 1000.50;
+      dto.amountTotal = 1000.5;
       dto.keeperId = 'acct_keeper123';
 
       const errors = await validate(dto);

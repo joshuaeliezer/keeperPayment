@@ -122,8 +122,10 @@ export const mockStripeAccountLink: Stripe.AccountLink = {
   expires_at: 1234567890,
   url: 'https://connect.stripe.com/setup/s/test',
   collect: null,
-  refresh_url: 'https://api.example.com/payments/keeper/onboarding/refresh?account_id=acct_keeper123',
-  return_url: 'https://api.example.com/payments/keeper/onboarding/success?account_id=acct_keeper123',
+  refresh_url:
+    'https://api.example.com/payments/keeper/onboarding/refresh?account_id=acct_keeper123',
+  return_url:
+    'https://api.example.com/payments/keeper/onboarding/success?account_id=acct_keeper123',
   type: 'account_onboarding',
 } as Stripe.AccountLink;
 

@@ -5,4 +5,4 @@ import { StripeService } from './stripe.service';
   providers: [StripeService],
   exports: [StripeService],
 })
-export class StripeModule {} 
+export class StripeModule {}
