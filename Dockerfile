@@ -31,5 +31,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node healthcheck.js
 
+# Set Node.js memory limit
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
 # Start the application
 CMD ["npm", "run", "start:prod"] 
