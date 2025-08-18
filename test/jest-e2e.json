@@ -6,7 +6,7 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "moduleNameMapping": {
+  "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/../src/$1"
   },
   "setupFilesAfterEnv": ["<rootDir>/test-setup.ts"],
@@ -17,5 +17,7 @@
   ],
   "coverageDirectory": "../coverage",
   "coverageReporters": ["text", "lcov", "html"],
-  "testTimeout": 30000
+  "testTimeout": 30000,
+  "forceExit": true,
+  "detectOpenHandles": true
 }
