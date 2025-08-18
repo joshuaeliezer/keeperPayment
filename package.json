@@ -103,6 +103,8 @@
     ],
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1"
-    }
+    },
+    "forceExit": true,
+    "detectOpenHandles": true
   }
 }

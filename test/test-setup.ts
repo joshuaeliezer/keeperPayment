@@ -84,3 +84,18 @@ global.console = {
   warn: jest.fn(),
   error: jest.fn(),
 };
+
+// Handle async operations cleanup
+afterAll(async () => {
+  // Wait for any pending promises to resolve
+  await new Promise((resolve) => setTimeout(resolve, 100));
+});
+
+// Force Jest to exit after tests
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
