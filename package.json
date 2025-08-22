@@ -35,7 +35,7 @@
     "amqplib": "^0.10.0",
     "axios": "^1.11.0",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.0",
+    "class-validator": "^0.14.2",
     "pg": "^8.11.0",
     "stripe": "^14.0.0",
     "typeorm": "^0.3.0"
