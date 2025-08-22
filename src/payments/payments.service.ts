@@ -56,7 +56,6 @@ export class PaymentsService {
       status: 'pending',
       keeperStripeAccountId: keeperId,
     });
-    console.log('payment', payment);
 
     await this.paymentsRepository.save(payment);
 
@@ -101,13 +100,6 @@ export class PaymentsService {
     try {
       const account = await this.stripeService.createKeeperAccount(email);
       this.logger.log(`Compte keeper créé avec succès - ID: ${account.id}`);
-      this.logger.debug('Détails du compte:', {
-        id: account.id,
-        email: account.email,
-        type: account.type,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-      });
       return account;
     } catch (error) {
       this.logger.error(

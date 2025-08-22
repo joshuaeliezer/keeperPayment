@@ -78,10 +78,19 @@ afterAll(async () => {
 });
 
 // Force Jest to exit after tests
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection detected during tests');
+  if (process.env.NODE_ENV === 'test') {
+    console.error(
+      'Reason:',
+      reason instanceof Error ? reason.message : 'Unknown reason',
+    );
+  }
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  console.error('Uncaught Exception detected during tests');
+  if (process.env.NODE_ENV === 'test') {
+    console.error('Error message:', error.message);
+  }
 });

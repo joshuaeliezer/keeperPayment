@@ -19,7 +19,6 @@ try {
   
   if (!coverageMatch) {
     console.error('Could not find coverage information in test output');
-    console.error('Output:', output);
     process.exit(1);
   }
   
@@ -38,6 +37,9 @@ try {
   process.exit(0);
   
 } catch (error) {
-  console.error('Error running coverage check:', error.message);
+  console.error('Error running coverage check');
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Details:', error.message);
+  }
   process.exit(1);
 }
